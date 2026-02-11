@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.RateLimiting; // 1. Nuevo usando para el límite
+using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Application.Interfaces;
 using Application.Services;
@@ -6,7 +6,7 @@ using ImageMagick;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- CONFIGURACIÓN DE GHOSTSCRIPT (Tu código existente) ---
+// --- CONFIGURACIÓN DE GHOSTSCRIPT ---
 var gsPath = Environment.GetEnvironmentVariable("GHOSTSCRIPT_PATH") ?? @"C:\Program Files\gs\gs10.06.0\bin";
 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
 {
@@ -16,39 +16,42 @@ if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtim
     }
 }
 
-// 2. CONFIGURACIÓN DEL RATE LIMITER (Agregalo aquí)
+// --- RATE LIMITER ---
 builder.Services.AddRateLimiter(options =>
 {
-    // Definimos una política llamada "pdf-limiter"
     options.AddFixedWindowLimiter("pdf-limiter", opt =>
     {
-        opt.Window = TimeSpan.FromMinutes(1); // Ventana de tiempo: 1 minuto
-        opt.PermitLimit = 5;                  // Solo 5 PDF por minuto por IP
-        opt.QueueLimit = 0;                   // No encolar, rechazar de inmediato
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 5; // Máximo 5 PDFs por minuto
+        opt.QueueLimit = 0;
     });
-
-    // Respuesta personalizada cuando alguien se pasa del límite
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
-// Services (Tu código existente)
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(); // Esto genera el v1.json
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(); // Necesario para la UI
 builder.Services.AddScoped<IPDFLectorService, PDFLectorService>();
 
 var app = builder.Build();
 
-// 3. ACTIVAR EL MIDDLEWARE (Importante: debe ir antes de MapControllers)
+// --- PIPELINE DE MIDDLEWARES ---
+
+// 1. Liberamos Swagger del bloque IF para que sea visible en Railway
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/openapi/v1.json", "v1");
+    options.RoutePrefix = string.Empty; // Carga Swagger en la raíz: https://...railway.app/
+});
+
+// 2. Rate Limiter después de Swagger (para que no te bloquee la UI)
 app.UseRateLimiter();
 
-// Swagger y pipeline (Tu código existente)
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.UseSwaggerUI(options => { options.SwaggerEndpoint("/openapi/v1.json", "v1"); });
-}
-
 app.UseHttpsRedirection();
+
+// 3. Controladores al final
 app.MapControllers();
+
 app.Run();
