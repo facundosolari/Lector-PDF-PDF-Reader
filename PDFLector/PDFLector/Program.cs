@@ -38,20 +38,23 @@ var app = builder.Build();
 
 // --- PIPELINE DE MIDDLEWARES ---
 
-// 1. Liberamos Swagger del bloque IF para que sea visible en Railway
+
+// 1. Swagger configurado con la ruta correcta para AddSwaggerGen
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-    options.SwaggerEndpoint("/openapi/v1.json", "v1");
-    options.RoutePrefix = string.Empty; // Carga Swagger en la raíz: https://...railway.app/
+    // CAMBIO AQUÍ: La ruta correcta para SwaggerGen es /swagger/v1/swagger.json
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
+
+    options.RoutePrefix = string.Empty;
 });
 
-// 2. Rate Limiter después de Swagger (para que no te bloquee la UI)
+// 2. Rate Limiter
 app.UseRateLimiter();
 
 app.UseHttpsRedirection();
 
-// 3. Controladores al final
+// 3. Controladores
 app.MapControllers();
 
 app.Run();
