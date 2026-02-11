@@ -19,10 +19,20 @@ namespace Application.Services
             try
             {
                 // 1. LECTURA DIGITAL (PdfPig)
-                // Lo abrimos en un bloque aparte para cerrar el stream antes de pasar al OCR si fuera necesario
                 using (var pdf = PdfDocument.Open(request.ArchivoStream))
                 {
                     totalPaginas = pdf.NumberOfPages;
+
+                    // VALIDACIÓN DE PÁGINAS: Detenemos el proceso si es muy largo
+                    if (totalPaginas > 10)
+                    {
+                        return new PDFResponse
+                        {
+                            Exito = false,
+                            MensajeError = $"El PDF tiene {totalPaginas} páginas. El límite para procesamiento es de 10 páginas."
+                        };
+                    }
+
                     foreach (var pagina in pdf.GetPages())
                     {
                         textoCompleto.AppendLine(pagina.Text);
@@ -31,28 +41,27 @@ namespace Application.Services
 
                 string resultado = textoCompleto.ToString().Trim();
 
-                // 2. ¿NECESITA OCR? (Si el texto digital es vacío)
+                // 2. ¿NECESITA OCR?
                 if (string.IsNullOrWhiteSpace(resultado))
                 {
                     try
                     {
-                        request.ArchivoStream.Position = 0;
+                        request.ArchivoStream.Position = 0; // Volvemos al inicio del stream para leerlo de nuevo
                         resultado = ProcesarConOCR(request.ArchivoStream);
                     }
                     catch (Exception ex)
                     {
-                        // ESCUDO: Si no hay Ghostscript o Tesseract, el programa NO muere.
+                        // Si falla el OCR (por falta de Ghostscript en local), avisamos pero no rompemos
                         return new PDFResponse
                         {
                             Exito = true,
-                            TextoExtraido = "AVISO: El PDF parece ser una imagen y el motor de OCR no está disponible en este sistema.",
+                            TextoExtraido = "AVISO: El PDF es una imagen y el motor de OCR no está disponible.",
                             CantidadPaginas = totalPaginas,
-                            MensajeError = "Detalle técnico: " + ex.Message
+                            MensajeError = ex.Message
                         };
                     }
                 }
 
-                // 3. RESPUESTA EXITOSA (Con limpieza de texto)
                 return new PDFResponse
                 {
                     TextoExtraido = LimpiarTexto(resultado),
@@ -62,8 +71,7 @@ namespace Application.Services
             }
             catch (Exception ex)
             {
-                // Error grave (ej: archivo dañado)
-                return new PDFResponse { Exito = false, MensajeError = "Error al procesar el archivo: " + ex.Message };
+                return new PDFResponse { Exito = false, MensajeError = "Error al procesar: " + ex.Message };
             }
         }
 

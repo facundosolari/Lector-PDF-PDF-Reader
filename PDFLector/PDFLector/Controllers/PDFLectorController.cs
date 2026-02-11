@@ -23,10 +23,14 @@ namespace PDFLector.Controllers
         {
             if (file == null || file.Length == 0)
                 return BadRequest("No se ha enviado un archivo válido.");
-            if (file.Length > 10 * 1024 * 1024)
-                return BadRequest("Archivo demasiado grande.");
+
+            // VALIDACIÓN DE TAMAÑO: 5MB es ideal para la capa gratuita de Railway
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest("El archivo es demasiado grande (Máximo 5MB).");
+
             if (file.ContentType != "application/pdf")
-                return BadRequest("El archivo no es un PDF real.");
+                return BadRequest("El archivo debe ser un formato PDF válido.");
+
             try
             {
                 using (var stream = file.OpenReadStream())
@@ -36,9 +40,13 @@ namespace PDFLector.Controllers
                         ArchivoStream = stream,
                         NombreArchivo = file.FileName
                     };
+
                     var resultado = _PDFLectorService.Ejecutar(request);
+
+                    // Si el servicio detecta más de 10 páginas, devuelve Exito = false
                     if (!resultado.Exito)
-                        return StatusCode(500, resultado.MensajeError);
+                        return BadRequest(resultado.MensajeError); // Cambiado a BadRequest para que el Front sepa que es error de validación
+
                     return Ok(resultado);
                 }
             }
