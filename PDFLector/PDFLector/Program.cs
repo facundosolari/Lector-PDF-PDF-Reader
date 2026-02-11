@@ -7,13 +7,18 @@ using ImageMagick;
 var builder = WebApplication.CreateBuilder(args);
 
 // --- CONFIGURACIÓN DE GHOSTSCRIPT ---
-var gsPath = Environment.GetEnvironmentVariable("GHOSTSCRIPT_PATH") ?? @"C:\Program Files\gs\gs10.06.0\bin";
 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
 {
+    var gsPath = @"C:\Program Files\gs\gs10.06.0\bin";
     if (System.IO.Directory.Exists(gsPath))
     {
         ImageMagick.MagickNET.SetGhostscriptDirectory(gsPath);
     }
+}
+else
+{
+    // Ruta para Railway (Linux)
+    ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/bin");
 }
 
 // --- RATE LIMITER ---
@@ -22,39 +27,31 @@ builder.Services.AddRateLimiter(options =>
     options.AddFixedWindowLimiter("pdf-limiter", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 5; // Máximo 5 PDFs por minuto
+        opt.PermitLimit = 5;
         opt.QueueLimit = 0;
     });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
 builder.Services.AddControllers();
-builder.Services.AddOpenApi(); // Esto genera el v1.json
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(); // Necesario para la UI
+builder.Services.AddEndpointsApiExplorer(); // Requerido para Swagger en .NET 8
+builder.Services.AddSwaggerGen();           // Generador de Swagger
 builder.Services.AddScoped<IPDFLectorService, PDFLectorService>();
 
 var app = builder.Build();
 
 // --- PIPELINE DE MIDDLEWARES ---
 
-
-// 1. Swagger configurado con la ruta correcta para AddSwaggerGen
+// Swagger siempre activo para Railway
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-    // CAMBIO AQUÍ: La ruta correcta para SwaggerGen es /swagger/v1/swagger.json
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
-
-    options.RoutePrefix = string.Empty;
+    options.RoutePrefix = string.Empty; // Swagger en la raíz
 });
 
-// 2. Rate Limiter
 app.UseRateLimiter();
-
 app.UseHttpsRedirection();
-
-// 3. Controladores
 app.MapControllers();
 
 app.Run();
