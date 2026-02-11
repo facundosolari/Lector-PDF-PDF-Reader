@@ -18,8 +18,8 @@ namespace PDFLector.Controllers
             _PDFLectorService = PDFLectorService;
         }
 
-        
-        [EnableRateLimiting("fixed")]
+
+        [EnableRateLimiting("pdf-limiter")]
         [AllowAnonymous]
         [HttpPost("leer")]
         public IActionResult LeerPdf(IFormFile file)
