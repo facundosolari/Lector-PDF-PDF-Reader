@@ -4,6 +4,7 @@ using Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PDFLector.Controllers
 {
@@ -17,6 +18,8 @@ namespace PDFLector.Controllers
             _PDFLectorService = PDFLectorService;
         }
 
+        
+        [EnableRateLimiting("fixed")]
         [AllowAnonymous]
         [HttpPost("leer")]
         public IActionResult LeerPdf(IFormFile file)
