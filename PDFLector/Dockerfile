@@ -22,15 +22,21 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
 # Instalación de dependencias (Ghostscript y Tesseract con idioma español)
+# Instalación con librerías de enlace (libgs)
 RUN apt-get update && apt-get install -y \
     libgdiplus \
     ghostscript \
+    libgs9 \
     libgs-dev \
     tesseract-ocr \
     tesseract-ocr-spa \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Desbloqueo total de PDF en ImageMagick (Cubre versión 6 y 7)
+# Enlace simbólico para el binario y la librería (Soluciona el 'Target of an invocation')
+RUN ln -s /usr/bin/gs /usr/bin/ghostscript || true && \
+    ln -s /usr/lib/x86_64-linux-gnu/libgs.so.9 /usr/lib/libgs.so || true
+
+# Desbloqueo de PDF (Búsqueda universal)
 RUN find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
 COPY --from=publish /app/publish .
