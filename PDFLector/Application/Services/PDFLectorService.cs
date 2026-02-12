@@ -41,16 +41,14 @@ namespace Application.Services
 
                 string resultado = textoCompleto.ToString().Trim();
 
-                // 2. ¿NECESITA OCR?
+                // 2. ¿NECESITA OCR? (Si el texto digital es nulo o muy corto)
                 if (string.IsNullOrWhiteSpace(resultado) || resultado.Length < 100)
                 {
                     try
                     {
                         request.ArchivoStream.Position = 0;
-                        // Intentamos obtener un resultado más limpio vía OCR
                         string resultadoOCR = ProcesarConOCR(request.ArchivoStream);
 
-                        // Si el OCR devolvió algo sustancial, lo usamos
                         if (!string.IsNullOrWhiteSpace(resultadoOCR))
                         {
                             resultado = resultadoOCR;
@@ -58,7 +56,7 @@ namespace Application.Services
                     }
                     catch (Exception ex)
                     {
-                        // Si el OCR falla por Ghostscript, devolvemos lo que PdfPig rescató inicialmente
+                        // Si el OCR falla, devolvemos lo que se rescató inicialmente
                         return new PDFResponse
                         {
                             Exito = true,
@@ -69,9 +67,23 @@ namespace Application.Services
                     }
                 }
 
+                // 3. VALIDACIÓN FINAL DE CONTENIDO
+                string textoFinal = LimpiarTexto(resultado);
+
+                if (string.IsNullOrWhiteSpace(textoFinal))
+                {
+                    return new PDFResponse
+                    {
+                        Exito = false,
+                        MensajeError = "No se pudo extraer ningún texto legible del documento. Verifique que el archivo no esté protegido o totalmente en blanco.",
+                        TextoExtraido = "",
+                        CantidadPaginas = totalPaginas
+                    };
+                }
+
                 return new PDFResponse
                 {
-                    TextoExtraido = LimpiarTexto(resultado),
+                    TextoExtraido = textoFinal,
                     CantidadPaginas = totalPaginas,
                     Exito = true
                 };
