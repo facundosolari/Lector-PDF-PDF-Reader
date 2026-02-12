@@ -79,17 +79,17 @@ namespace Application.Services
         {
             var textoOcr = new StringBuilder();
 
-            var settings = new MagickReadSettings
-            {
-                Density = new Density(300, 300)
-            };
+            // CAMBIO AQUÍ: Obtenemos la ruta absoluta de la carpeta tessdata
+            string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+
+            var settings = new MagickReadSettings { Density = new Density(300, 300) };
 
             using (var images = new MagickImageCollection())
             {
-                // Esta línea es la que suele crashear si no hay Ghostscript
                 images.Read(stream, settings);
 
-                using (var engine = new TesseractEngine(@"./tessdata", "spa+eng", EngineMode.Default))
+                // Usamos la variable 'dataPath' en lugar de "./tessdata"
+                using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                 {
                     foreach (var image in images)
                     {
