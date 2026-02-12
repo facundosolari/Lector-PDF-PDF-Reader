@@ -17,8 +17,9 @@ if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtim
 }
 else
 {
-    // Ruta para Railway (Linux)
-    ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/bin");
+    // EN LINUX (RAILWAY): No llamar a SetGhostscriptDirectory.
+    // Magick.NET detectará automáticamente el comando 'gs' instalado por apt-get.
+    // Esto evita el error de "Invocación" por rutas mal configuradas.
 }
 
 // --- RATE LIMITER ---
