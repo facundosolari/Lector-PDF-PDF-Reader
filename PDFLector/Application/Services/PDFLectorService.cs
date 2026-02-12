@@ -79,7 +79,7 @@ namespace Application.Services
         {
             var textoOcr = new StringBuilder();
 
-            // CAMBIO AQUÍ: Obtenemos la ruta absoluta de la carpeta tessdata
+            // CAMBIO VITAL: Buscamos la carpeta en la raíz de ejecución de la app
             string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
 
             var settings = new MagickReadSettings { Density = new Density(300, 300) };
@@ -88,7 +88,7 @@ namespace Application.Services
             {
                 images.Read(stream, settings);
 
-                // Usamos la variable 'dataPath' en lugar de "./tessdata"
+                // Usamos 'dataPath' para que Tesseract sepa dónde están los idiomas
                 using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                 {
                     foreach (var image in images)
