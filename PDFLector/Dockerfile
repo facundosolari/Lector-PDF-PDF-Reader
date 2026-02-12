@@ -26,18 +26,18 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libgdiplus \
     ghostscript \
-    libgs9 \
     libgs-dev \
     tesseract-ocr \
     tesseract-ocr-spa \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Enlace simbólico para el binario y la librería (Soluciona el 'Target of an invocation')
-RUN ln -s /usr/bin/gs /usr/bin/ghostscript || true && \
-    ln -s /usr/lib/x86_64-linux-gnu/libgs.so.9 /usr/lib/libgs.so || true
+# Forzamos los enlaces simbólicos para que Magick.NET encuentre la librería
+RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
+    ln -s /usr/bin/gs /usr/bin/ghostscript || true
 
-# Desbloqueo de PDF (Búsqueda universal)
+# Desbloqueo de PDF en ImageMagick
 RUN find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
+
 
 COPY --from=publish /app/publish .
 
