@@ -86,31 +86,47 @@ namespace Application.Services
         {
             var textoOcr = new StringBuilder();
 
-            // CAMBIO VITAL: Buscamos la carpeta en la raíz de ejecución de la app
+            // Ruta de los datos de Tesseract
             string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
 
+            // Configuración de resolución (300 DPI es el estándar para buen OCR)
             var settings = new MagickReadSettings { Density = new Density(300, 300) };
+
+            Console.WriteLine("Iniciando conversión de PDF a imagen para OCR...");
 
             using (var images = new MagickImageCollection())
             {
+                // Lee el PDF. Si Ghostscript no está bien enlazado, fallará aquí.
                 images.Read(stream, settings);
 
-                // Usamos 'dataPath' para que Tesseract sepa dónde están los idiomas
+                // Cargamos los idiomas (español e inglés)
                 using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                 {
+                    int paginaActual = 1;
                     foreach (var image in images)
                     {
-                        image.Format = MagickFormat.Png;
-                        using (var pix = Pix.LoadFromMemory(image.ToByteArray()))
+                        Console.WriteLine($"Procesando página {paginaActual}...");
+
+                        // Optimización: Escala de grises reduce consumo de RAM y mejora la lectura
+                        image.Grayscale();
+
+                        // Convertimos la imagen procesada a un formato que Tesseract entienda (Pix)
+                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                         {
                             using (var page = engine.Process(pix))
                             {
-                                textoOcr.AppendLine(page.GetText());
+                                string textoPagina = page.GetText();
+                                textoOcr.AppendLine(textoPagina);
                             }
                         }
+
+                        // Liberar memoria de la imagen inmediatamente
+                        image.Dispose();
+                        paginaActual++;
                     }
                 }
             }
+
             return textoOcr.ToString();
         }
 
