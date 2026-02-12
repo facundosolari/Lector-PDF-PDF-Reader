@@ -115,18 +115,18 @@ namespace Application.Services
                 {
                     foreach (var image in images)
                     {
-                        image.Grayscale();
+                        // 1. Convertir a Blanco y Negro puro (elimina el error de spp/bps)
+                        image.ColorType = ColorType.Bilevel;
+                        image.Settings.Compression = CompressionMethod.NoCompression;
 
-                        // 3. OPTIMIZACIÓN DE MEMORIA: Usar formatos más ligeros para el puente
-                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Bmp)))
+                        // 2. Usar formato PNG (es el más compatible con Tesseract)
+                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                         {
                             using (var page = engine.Process(pix))
                             {
                                 textoOcr.AppendLine(page.GetText());
                             }
                         }
-                        // Importante: No hace falta llamar a image.Dispose() aquí 
-                        // porque MagickImageCollection se encarga al terminar el using.
                     }
                 }
             }
