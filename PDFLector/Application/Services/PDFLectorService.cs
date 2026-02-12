@@ -96,16 +96,13 @@ namespace Application.Services
 
         private string ProcesarConOCR(Stream stream)
         {
-
             var textoOcr = new StringBuilder();
             string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
-            Console.WriteLine($"[DEBUG] Directorio Base: {AppContext.BaseDirectory}");
-            Console.WriteLine($"[DEBUG] ¿Existe tessdata?: {Directory.Exists(dataPath)}");
 
-            // 1. FORZAR RUTA EN LINUX (Soluciona el error de Invocación)
+            // CONFIGURACIÓN PARA LINUX (RAILWAY)
             if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
             {
-                // Esta es la ruta estándar donde apt-get instala las librerías en Debian
+                // En Railway, Ghostscript se instala en esta ruta estándar de Debian
                 ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
             }
 
