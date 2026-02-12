@@ -42,22 +42,29 @@ namespace Application.Services
                 string resultado = textoCompleto.ToString().Trim();
 
                 // 2. ¿NECESITA OCR?
-                if (string.IsNullOrWhiteSpace(resultado))
+                if (string.IsNullOrWhiteSpace(resultado) || resultado.Length < 100)
                 {
                     try
                     {
-                        request.ArchivoStream.Position = 0; // Volvemos al inicio del stream para leerlo de nuevo
-                        resultado = ProcesarConOCR(request.ArchivoStream);
+                        request.ArchivoStream.Position = 0;
+                        // Intentamos obtener un resultado más limpio vía OCR
+                        string resultadoOCR = ProcesarConOCR(request.ArchivoStream);
+
+                        // Si el OCR devolvió algo sustancial, lo usamos
+                        if (!string.IsNullOrWhiteSpace(resultadoOCR))
+                        {
+                            resultado = resultadoOCR;
+                        }
                     }
                     catch (Exception ex)
                     {
-                        // Si falla el OCR (por falta de Ghostscript en local), avisamos pero no rompemos
+                        // Si el OCR falla por Ghostscript, devolvemos lo que PdfPig rescató inicialmente
                         return new PDFResponse
                         {
                             Exito = true,
-                            TextoExtraido = "AVISO: El PDF es una imagen y el motor de OCR no está disponible.",
+                            TextoExtraido = LimpiarTexto(resultado) + "\n\n(AVISO: OCR falló, se muestra texto digital base)",
                             CantidadPaginas = totalPaginas,
-                            MensajeError = ex.Message
+                            MensajeError = "Detalle OCR: " + ex.Message
                         };
                     }
                 }
