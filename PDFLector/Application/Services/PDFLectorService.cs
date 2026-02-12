@@ -99,7 +99,11 @@ namespace Application.Services
 
             var settings = new MagickReadSettings { Density = new Density(300, 300) };
 
-
+            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                // Esta es la ruta donde Railway instala las librerías nativas
+                MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
+            }
             using (var images = new MagickImageCollection())
             {
                 // 2. ASEGURAR POSICIÓN DEL STREAM
