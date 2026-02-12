@@ -1,7 +1,28 @@
+# 1. Capa de compilación (SDK)
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copiamos los archivos de proyecto (Asegúrate que las rutas sean correctas según tu repo)
+COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
+COPY ["Application/Application.csproj", "Application/"]
+
+RUN dotnet restore "PDFLector/PDFLector.csproj"
+
+# Copiamos todo el código y compilamos
+COPY . .
+WORKDIR "/src/PDFLector"
+RUN dotnet build "PDFLector.csproj" -c Release -o /app/build
+
+# 2. Capa de publicación (ESTO ES LO QUE FALLABA)
+# Debe nacer de la etapa 'build' anterior
+FROM build AS publish
+RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# 3. Imagen final de ejecución (Runtime)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# 1. Instalación de motores nativos (Indispensable para Linux)
+# Instalación de motores nativos para el OCR
 RUN apt-get update && apt-get install -y \
     libgdiplus \
     ghostscript \
@@ -10,16 +31,14 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-spa \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2. LA LLAVE DEL ÉXITO: Esto soluciona el error de "Invocación"
-# Le dice a la App exactamente dónde están las librerías de Ghostscript
+# Configuración de entorno para evitar el error de "Invocación"
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
-# 3. Enlaces simbólicos de seguridad
-RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true
+# Enlaces simbólicos y permisos de PDF
+RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
+    find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
-# 4. Desbloqueo de permisos para PDFs
-RUN find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
-
+# Traemos los archivos publicados
 COPY --from=publish /app/publish .
 
 EXPOSE 8080
