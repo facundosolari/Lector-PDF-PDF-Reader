@@ -84,49 +84,48 @@ namespace Application.Services
 
         private string ProcesarConOCR(Stream stream)
         {
+
             var textoOcr = new StringBuilder();
-
-            // Ruta de los datos de Tesseract
             string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+            Console.WriteLine($"[DEBUG] Directorio Base: {AppContext.BaseDirectory}");
+            Console.WriteLine($"[DEBUG] ¿Existe tessdata?: {Directory.Exists(dataPath)}");
 
-            // Configuración de resolución (300 DPI es el estándar para buen OCR)
+            // 1. FORZAR RUTA EN LINUX (Soluciona el error de Invocación)
+            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                // Esta es la ruta estándar donde apt-get instala las librerías en Debian
+                ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
+            }
+
             var settings = new MagickReadSettings { Density = new Density(300, 300) };
 
-            Console.WriteLine("Iniciando conversión de PDF a imagen para OCR...");
 
             using (var images = new MagickImageCollection())
             {
-                // Lee el PDF. Si Ghostscript no está bien enlazado, fallará aquí.
+                // 2. ASEGURAR POSICIÓN DEL STREAM
+                if (stream.CanSeek) stream.Position = 0;
+
                 images.Read(stream, settings);
 
-                // Cargamos los idiomas (español e inglés)
                 using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                 {
-                    int paginaActual = 1;
                     foreach (var image in images)
                     {
-                        Console.WriteLine($"Procesando página {paginaActual}...");
-
-                        // Optimización: Escala de grises reduce consumo de RAM y mejora la lectura
                         image.Grayscale();
 
-                        // Convertimos la imagen procesada a un formato que Tesseract entienda (Pix)
-                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
+                        // 3. OPTIMIZACIÓN DE MEMORIA: Usar formatos más ligeros para el puente
+                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Bmp)))
                         {
                             using (var page = engine.Process(pix))
                             {
-                                string textoPagina = page.GetText();
-                                textoOcr.AppendLine(textoPagina);
+                                textoOcr.AppendLine(page.GetText());
                             }
                         }
-
-                        // Liberar memoria de la imagen inmediatamente
-                        image.Dispose();
-                        paginaActual++;
+                        // Importante: No hace falta llamar a image.Dispose() aquí 
+                        // porque MagickImageCollection se encarga al terminar el using.
                     }
                 }
             }
-
             return textoOcr.ToString();
         }
 
