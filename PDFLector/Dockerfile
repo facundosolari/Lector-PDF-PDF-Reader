@@ -1,22 +1,7 @@
-# Capa de compilación
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
-COPY ["Application/Application.csproj", "Application/"]
-RUN dotnet restore "PDFLector/PDFLector.csproj"
-COPY . .
-WORKDIR "/src/PDFLector"
-RUN dotnet build "PDFLector.csproj" -c Release -o /app/build
-
-# Publicación
-FROM build AS publish
-RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=false
-
-# Imagen final de ejecución
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# 1. Instalamos los motores (Ghostscript y Tesseract)
+# 1. Instalación de motores nativos (Indispensable para Linux)
 RUN apt-get update && apt-get install -y \
     libgdiplus \
     ghostscript \
@@ -25,14 +10,14 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-spa \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 2. CONFIGURACIÓN DE ENTORNO (Crucial para Railway)
-# Esta línea le da el "GPS" a tu código para encontrar Ghostscript y evitar el error de invocación.
+# 2. LA LLAVE DEL ÉXITO: Esto soluciona el error de "Invocación"
+# Le dice a la App exactamente dónde están las librerías de Ghostscript
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
-# 3. Enlaces simbólicos para asegurar que ImageMagick encuentre la librería .so
+# 3. Enlaces simbólicos de seguridad
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true
 
-# 4. Desbloqueo de seguridad para PDFs (ImageMagick por defecto bloquea PDFs en Linux)
+# 4. Desbloqueo de permisos para PDFs
 RUN find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
 COPY --from=publish /app/publish .
