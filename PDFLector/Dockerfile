@@ -2,16 +2,17 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Ajuste de rutas según tu estructura: CarpetaContenedora/Proyecto/archivo
-COPY ["PDFLector/PDFLector/PDFLector.csproj", "PDFLector/PDFLector/"]
-COPY ["PDFLector/Application/Application.csproj", "PDFLector/Application/"]
+# Como Railway ya está en la carpeta 'PDFLector', las rutas son directas
+COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
+COPY ["Application/Application.csproj", "Application/"]
 
-RUN dotnet restore "PDFLector/PDFLector/PDFLector.csproj"
+# Restauramos dependencias
+RUN dotnet restore "PDFLector/PDFLector.csproj"
 
-# Copiamos todo el contenido de la subcarpeta PDFLector al contenedor
-COPY PDFLector/ . 
+# Copiamos el resto del código (todo lo que está en 'PDFLector')
+COPY . . 
 
-# Nos movemos a la carpeta del proyecto principal para compilar
+# Compilamos el proyecto principal
 WORKDIR "/src/PDFLector"
 RUN dotnet build "PDFLector.csproj" -c Release -o /app/build
 
@@ -19,11 +20,11 @@ RUN dotnet build "PDFLector.csproj" -c Release -o /app/build
 FROM build AS publish
 RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# 3. Imagen final de ejecución (Runtime) - CON LAS LIBRERÍAS DE OCR
+# 3. Imagen final de ejecución (Runtime) - INDISPENSABLE PARA EL OCR
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# Instalación de motores nativos (Indispensable para Linux)
+# Instalación de dependencias nativas para el motor de OCR y manejo de imágenes
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdiplus \
     libc6-dev \
@@ -34,16 +35,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtesseract-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Variables de entorno para que .NET encuentre las librerías nativas
+# Variables para que .NET cargue correctamente las librerías de C++ en Linux
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV ASPNETCORE_URLS=http://+:8080
 
-# Permisos para que Ghostscript pueda procesar el PDF antes del OCR
+# Ajustes de seguridad para que Ghostscript permita procesar PDFs
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
     find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
-# Traemos los archivos publicados
+# Copiamos los archivos publicados desde la etapa anterior
 COPY --from=publish /app/publish .
 
 EXPOSE 8080
