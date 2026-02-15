@@ -4,7 +4,6 @@ WORKDIR /src
 
 COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
 COPY ["Application/Application.csproj", "Application/"]
-
 RUN dotnet restore "PDFLector/PDFLector.csproj"
 
 COPY . . 
@@ -19,7 +18,7 @@ RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=f
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# Instalación de dependencias nativas
+# Instalación de dependencias
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdiplus \
     libc6-dev \
@@ -32,21 +31,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libleptonica-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- SOLUCIÓN DEFINITIVA PARA EL ERROR DE INVOCACIÓN ---
-# Forzamos la creación del archivo que busca el NuGet (1.82.0) apuntando a la librería del sistema
+# --- SOLUCIÓN QUIRÚRGICA ---
+# Creamos el enlace en DOS rutas posibles para que no haya margen de error
 RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true && \
+    ln -s /usr/lib/x86_64-linux-gnu/liblept.so /app/libleptonica-1.82.0.so || true && \
     ln -s /usr/lib/x86_64-linux-gnu/libtesseract.so /usr/lib/x86_64-linux-gnu/libtesseract5.so || true
 
-# Variables de entorno críticas
+# Variables de entorno críticas: Incluimos /app en la búsqueda de librerías
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
-ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
+ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib:/app"
 ENV ASPNETCORE_URLS=http://+:8080
 
-# Configuración de Ghostscript y permisos de PDF
+# Permisos de Ghostscript
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
     find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
-# Traemos la aplicación publicada
 COPY --from=publish /app/publish .
 
 EXPOSE 8080
