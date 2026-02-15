@@ -98,66 +98,54 @@ namespace Application.Services
         {
             var textoOcr = new StringBuilder();
             bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
-            string dataPath = "";
 
-            if (isWindows)
-            {
-                dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
-            }
-            else
-            {
-                // SISTEMA DE AUTODETECCIÓN PARA RAILWAY (LINUX)
-                string[] posiblesRutas = {
-            "/usr/share/tesseract-ocr/5/tessdata",
-            "/usr/share/tesseract-ocr/4.00/tessdata",
-            "/usr/share/tesseract-ocr/tessdata"
-        };
+            // Forzamos la ruta de Linux a la ubicación estándar de la versión 5 que instala el Dockerfile
+            string dataPath = isWindows
+                ? Path.Combine(AppContext.BaseDirectory, "tessdata")
+                : "/usr/share/tesseract-ocr/5/tessdata";
 
-                foreach (var ruta in posiblesRutas)
+            // LOG DE DIAGNÓSTICO: Si falla, esto nos dirá por qué en los logs de Railway
+            if (!isWindows)
+            {
+                if (!Directory.Exists(dataPath))
                 {
-                    if (Directory.Exists(ruta))
-                    {
-                        dataPath = ruta;
-                        break;
-                    }
+                    Console.WriteLine($"ERROR CRÍTICO: No existe la ruta {dataPath}");
+                    // Intento de rescate si Debian instaló la v4
+                    if (Directory.Exists("/usr/share/tesseract-ocr/4.00/tessdata"))
+                        dataPath = "/usr/share/tesseract-ocr/4.00/tessdata";
                 }
-
-                // Configuración de Ghostscript (Ruta nativa en Debian)
                 ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
             }
-
-            // Si después de buscar no existe la ruta en Linux, lanzamos error descriptivo
-            if (string.IsNullOrEmpty(dataPath) || !Directory.Exists(dataPath))
-            {
-                throw new Exception($"No se encontró la carpeta tessdata. Ruta intentada: {dataPath ?? "Nula"}");
-            }
-
-            var settings = new MagickReadSettings { Density = new Density(300, 300) };
 
             using (var images = new MagickImageCollection())
             {
                 if (stream.CanSeek) stream.Position = 0;
 
-                // Leemos el PDF (MagickNET usará Ghostscript aquí)
+                var settings = new MagickReadSettings { Density = new Density(300, 300) };
                 images.Read(stream, settings);
 
-                using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
+                // USAMOS UN TRY-CATCH ESPECÍFICO AQUÍ PARA VER EL ERROR REAL
+                try
                 {
-                    foreach (var image in images)
+                    using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                     {
-                        // Optimización de imagen para OCR
-                        image.ColorType = ColorType.Bilevel;
-                        image.Settings.Compression = CompressionMethod.NoCompression;
-                        image.AutoThreshold(AutoThresholdMethod.Kapur); // Mejora legibilidad
-
-                        using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
+                        foreach (var image in images)
                         {
-                            using (var page = engine.Process(pix))
+                            image.ColorType = ColorType.Bilevel;
+                            using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                             {
-                                textoOcr.AppendLine(page.GetText());
+                                using (var page = engine.Process(pix))
+                                {
+                                    textoOcr.AppendLine(page.GetText());
+                                }
                             }
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    // Esto enviará el detalle técnico real al JSON de respuesta
+                    throw new Exception($"Fallo interno Tesseract en {dataPath}. Detalle: {ex.Message} -> {ex.InnerException?.Message}");
                 }
             }
             return textoOcr.ToString();

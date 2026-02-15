@@ -32,8 +32,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-spa \
     tesseract-ocr-eng \
     libtesseract-dev \
+    libleptonica-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+    
 # Variables de entorno para librerías de C++
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
