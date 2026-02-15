@@ -1,4 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -11,4 +12,14 @@
 		<PackageReference Include="PdfPig" Version="0.1.9" />
 		<PackageReference Include="Tesseract" Version="5.2.0" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="runtimes\win-x64\native\leptonica-1.82.0.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="runtimes\win-x64\native\tesseract50.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
 </Project>
