@@ -97,7 +97,9 @@ namespace Application.Services
         private string ProcesarConOCR(Stream stream)
         {
             var textoOcr = new StringBuilder();
-            string dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+            string dataPath = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
+        ? Path.Combine(AppContext.BaseDirectory, "tessdata")
+        : "/usr/share/tesseract-ocr/5/tessdata"; // Ruta estándar en Debian/Railway
 
             // CONFIGURACIÓN PARA LINUX (RAILWAY)
             if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
