@@ -2,13 +2,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copiamos archivos de proyecto (Contexto ajustado a la raíz del repo)
+# Copiamos archivos de proyecto
 COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
 COPY ["Application/Application.csproj", "Application/"]
 
 RUN dotnet restore "PDFLector/PDFLector.csproj"
 
-# Copiamos todo el código
+# Copiamos todo el código y compilamos
 COPY . . 
 WORKDIR "/src/PDFLector"
 RUN dotnet build "PDFLector.csproj" -c Release -o /app/build
@@ -21,7 +21,7 @@ RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=f
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# Instalación de dependencias nativas para OCR e imágenes
+# Instalación de dependencias nativas
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdiplus \
     libc6-dev \
@@ -34,17 +34,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libleptonica-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# SOLUCIÓN AL ERROR DE "Failed to find library libleptonica-1.82.0.so"
-# Creamos enlaces simbólicos para mapear lo que el NuGet espera con lo que Linux tiene
-RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true && \
-    ln -s /usr/lib/x86_64-linux-gnu/libtesseract.so /usr/lib/x86_64-linux-gnu/libtesseract5.so || true
+# --- SOLUCIÓN QUIRÚRGICA PARA LEPTONICA ---
+# Creamos el enlace simbólico para que la app encuentre la versión 1.82.0 usando la del sistema
+RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true
 
 # Variables de entorno para librerías de C++
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV ASPNETCORE_URLS=http://+:8080
 
-# Configuración de Ghostscript (symlink y permisos de PDF)
+# Configuración de seguridad para Ghostscript (permite leer PDFs)
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
     find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
