@@ -44,13 +44,10 @@ COPY --from=publish /app/publish .
 # --- MAPEO ROBUSTO (Copia física y permisos) ---
 # Usamos copias en lugar de links para evitar problemas de resolución de archivos en el contenedor
 RUN LIBLEPT_REAL=$(find /usr/lib/x86_64-linux-gnu/ -name "liblept.so.*" | head -n 1) && \
-    cp $LIBLEPT_REAL /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so && \
     cp $LIBLEPT_REAL /usr/lib/libleptonica-1.82.0.so && \
     cp $LIBLEPT_REAL /app/libleptonica-1.82.0.so && \
     LIBTESS_REAL=$(find /usr/lib/x86_64-linux-gnu/ -name "libtesseract.so.*" | head -n 1) && \
-    cp $LIBTESS_REAL /usr/lib/x86_64-linux-gnu/libtesseract5.so && \
     cp $LIBTESS_REAL /app/libtesseract5.so && \
-    chmod 755 /usr/lib/libleptonica-1.82.0.so && \
     ldconfig
 
 # Limpieza final de restos de Windows
