@@ -2,7 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copiamos archivos de proyecto
+# Copiamos archivos de proyecto (Contexto ajustado a la raíz del repo)
 COPY ["PDFLector/PDFLector.csproj", "PDFLector/"]
 COPY ["Application/Application.csproj", "Application/"]
 
@@ -21,8 +21,7 @@ RUN dotnet publish "PDFLector.csproj" -c Release -o /app/publish /p:UseAppHost=f
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# Instalación de dependencias nativas
-# AGREGADO: tesseract-ocr-eng para coincidir con tu código "spa+eng"
+# Instalación de dependencias nativas para OCR e imágenes
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdiplus \
     libc6-dev \
@@ -35,13 +34,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libleptonica-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-    
+# SOLUCIÓN AL ERROR DE "Failed to find library libleptonica-1.82.0.so"
+# Creamos enlaces simbólicos para mapear lo que el NuGet espera con lo que Linux tiene
+RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true && \
+    ln -s /usr/lib/x86_64-linux-gnu/libtesseract.so /usr/lib/x86_64-linux-gnu/libtesseract5.so || true
+
 # Variables de entorno para librerías de C++
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV ASPNETCORE_URLS=http://+:8080
 
-# Configuración de seguridad para Ghostscript (permite leer PDFs)
+# Configuración de Ghostscript (symlink y permisos de PDF)
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
     find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
