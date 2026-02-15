@@ -1,11 +1,12 @@
 ﻿using Application.Interfaces;
 using Application.Models.Request;
 using Application.Models.Response;
-using UglyToad.PdfPig;
-using System.Text;
-using Tesseract;
 using ImageMagick;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
+using Tesseract;
+using UglyToad.PdfPig;
 
 namespace Application.Services
 {
@@ -96,34 +97,28 @@ namespace Application.Services
         private string ProcesarConOCR(Stream stream)
         {
             var textoOcr = new StringBuilder();
-            bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-            // Definimos la ruta de tessdata según el SO
+            // Si seteaste TESSDATA_PREFIX en Railway, Tesseract lo encontrará solo. 
+            // Si no, usamos la ruta fija.
             string dataPath = isWindows
                 ? Path.Combine(AppContext.BaseDirectory, "tessdata")
                 : "/usr/share/tesseract-ocr/5/tessdata";
 
-            if (!isWindows)
-            {
-                // ESTA LÍNEA ES VITAL: Le dice a Tesseract dónde buscamos las librerías que copiamos en el Dockerfile
-                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", "/app:/usr/lib/x86_64-linux-gnu");
-            }
-
             using (var images = new MagickImageCollection())
             {
-                // Configuramos la resolución para que el OCR sea legible
                 var settings = new MagickReadSettings { Density = new Density(300, 300) };
                 if (stream.CanSeek) stream.Position = 0;
                 images.Read(stream, settings);
 
                 try
                 {
-                    // EngineMode.LstmOnly es el "secreto" para que no tire 'Target of an invocation' en Linux
+                    // Dejamos que el SO resuelva las librerías gracias a las variables de Railway
                     using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.LstmOnly))
                     {
                         foreach (var image in images)
                         {
-                            image.ColorType = ColorType.Bilevel; // Blanco y negro para mejor lectura
+                            image.ColorType = ColorType.Bilevel;
                             using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                             {
                                 using (var page = engine.Process(pix))
@@ -136,12 +131,9 @@ namespace Application.Services
                 }
                 catch (Exception ex)
                 {
-                    // Si esto falla, el mensaje nos dirá exactamente qué intentó cargar el sistema
-                    string libPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "no-set";
-                    throw new Exception($"Fallo crítico en Tesseract. Modo: LstmOnly. Ruta: {dataPath}. LibPath: {libPath}. Error: {ex.Message}");
+                    throw new Exception($"Error OCR: {ex.Message} -> {ex.InnerException?.Message}");
                 }
             }
-
             return textoOcr.ToString();
         }
 
