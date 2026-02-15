@@ -97,40 +97,59 @@ namespace Application.Services
         private string ProcesarConOCR(Stream stream)
         {
             var textoOcr = new StringBuilder();
-            string dataPath = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
-        ? Path.Combine(AppContext.BaseDirectory, "tessdata")
-        : "/usr/share/tesseract-ocr/5/tessdata"; // Ruta estándar en Debian/Railway
+            bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+            string dataPath = "";
 
-            // CONFIGURACIÓN PARA LINUX (RAILWAY)
-            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            if (isWindows)
             {
-                // En Railway, Ghostscript se instala en esta ruta estándar de Debian
+                dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+            }
+            else
+            {
+                // SISTEMA DE AUTODETECCIÓN PARA RAILWAY (LINUX)
+                string[] posiblesRutas = {
+            "/usr/share/tesseract-ocr/5/tessdata",
+            "/usr/share/tesseract-ocr/4.00/tessdata",
+            "/usr/share/tesseract-ocr/tessdata"
+        };
+
+                foreach (var ruta in posiblesRutas)
+                {
+                    if (Directory.Exists(ruta))
+                    {
+                        dataPath = ruta;
+                        break;
+                    }
+                }
+
+                // Configuración de Ghostscript (Ruta nativa en Debian)
                 ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
+            }
+
+            // Si después de buscar no existe la ruta en Linux, lanzamos error descriptivo
+            if (string.IsNullOrEmpty(dataPath) || !Directory.Exists(dataPath))
+            {
+                throw new Exception($"No se encontró la carpeta tessdata. Ruta intentada: {dataPath ?? "Nula"}");
             }
 
             var settings = new MagickReadSettings { Density = new Density(300, 300) };
 
-            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-            {
-                // Esta es la ruta donde Railway instala las librerías nativas
-                MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
-            }
             using (var images = new MagickImageCollection())
             {
-                // 2. ASEGURAR POSICIÓN DEL STREAM
                 if (stream.CanSeek) stream.Position = 0;
 
+                // Leemos el PDF (MagickNET usará Ghostscript aquí)
                 images.Read(stream, settings);
 
                 using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                 {
                     foreach (var image in images)
                     {
-                        // 1. Convertir a Blanco y Negro puro (elimina el error de spp/bps)
+                        // Optimización de imagen para OCR
                         image.ColorType = ColorType.Bilevel;
                         image.Settings.Compression = CompressionMethod.NoCompression;
+                        image.AutoThreshold(AutoThresholdMethod.Kapur); // Mejora legibilidad
 
-                        // 2. Usar formato PNG (es el más compatible con Tesseract)
                         using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                         {
                             using (var page = engine.Process(pix))
