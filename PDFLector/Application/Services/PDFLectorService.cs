@@ -105,7 +105,7 @@ namespace Application.Services
             }
             else
             {
-                // 1. DIAGNÓSTICO (Ya sabemos que esto da True por tus logs)
+                // 1. DIAGNÓSTICO (Confirmamos presencia física de la lib)
                 Console.WriteLine("--- DIAGNÓSTICO DE SISTEMA ---");
                 Console.WriteLine($"¿Existe /app/libleptonica-1.82.0.so?: {File.Exists("/app/libleptonica-1.82.0.so")}");
 
@@ -125,7 +125,7 @@ namespace Application.Services
                     }
                 }
 
-                // FORZAR RUTA DE LIBRERÍAS EN LINUX
+                // Reforzamos la ruta de carga de librerías
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", "/app:/usr/lib/x86_64-linux-gnu");
             }
 
@@ -140,8 +140,8 @@ namespace Application.Services
 
                 try
                 {
-                    // El motor ahora debería encontrar la librería en /app gracias al COPY del Dockerfile
-                    using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
+                    // CAMBIO CRÍTICO: Usamos LstmOnly para evitar conflictos de versiones en Linux
+                    using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.LstmOnly))
                     {
                         foreach (var image in images)
                         {
@@ -159,7 +159,7 @@ namespace Application.Services
                 catch (Exception ex)
                 {
                     string extraInfo = !isWindows ? $" | LibPath: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH")}" : "";
-                    throw new Exception($"Error OCR: {ex.Message}{extraInfo}");
+                    throw new Exception($"Error OCR: {ex.Message} -> {ex.InnerException?.Message}{extraInfo}");
                 }
             }
             return textoOcr.ToString();

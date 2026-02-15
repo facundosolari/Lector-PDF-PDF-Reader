@@ -1,8 +1,6 @@
-using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
 using Application.Interfaces;
 using Application.Services;
-using ImageMagick;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
