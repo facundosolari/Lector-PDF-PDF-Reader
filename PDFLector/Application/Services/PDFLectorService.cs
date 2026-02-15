@@ -105,13 +105,11 @@ namespace Application.Services
             }
             else
             {
-                // 1. DIAGNÓSTICO DE LIBRERÍAS (Aparecerá en logs de Railway)
+                // 1. DIAGNÓSTICO (Ya sabemos que esto da True por tus logs)
                 Console.WriteLine("--- DIAGNÓSTICO DE SISTEMA ---");
-                string[] libCheck = { "/usr/lib/x86_64-linux-gnu/liblept.so", "/app/libleptonica-1.82.0.so" };
-                foreach (var lib in libCheck)
-                    Console.WriteLine($"¿Existe {lib}?: {File.Exists(lib)}");
+                Console.WriteLine($"¿Existe /app/libleptonica-1.82.0.so?: {File.Exists("/app/libleptonica-1.82.0.so")}");
 
-                // 2. BUSQUEDA AUTOMÁTICA DE TESSDATA
+                // 2. BUSQUEDA DE TESSDATA
                 string[] posiblesRutas = {
             "/usr/share/tesseract-ocr/5/tessdata",
             "/usr/share/tesseract-ocr/4.00/tessdata",
@@ -123,16 +121,16 @@ namespace Application.Services
                     if (Directory.Exists(ruta))
                     {
                         dataPath = ruta;
-                        Console.WriteLine($"CARPETA ENCONTRADA: {ruta}");
                         break;
                     }
                 }
 
-                ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
+                // FORZAR RUTA DE LIBRERÍAS EN LINUX
+                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", "/app:/usr/lib/x86_64-linux-gnu");
             }
 
             if (string.IsNullOrEmpty(dataPath) || !Directory.Exists(dataPath))
-                throw new Exception("No se encontró la carpeta tessdata en ninguna ruta conocida de Linux.");
+                throw new Exception("No se encontró la carpeta tessdata en Linux.");
 
             using (var images = new MagickImageCollection())
             {
@@ -142,7 +140,7 @@ namespace Application.Services
 
                 try
                 {
-                    // Intentamos inicializar con la ruta encontrada
+                    // El motor ahora debería encontrar la librería en /app gracias al COPY del Dockerfile
                     using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                     {
                         foreach (var image in images)
@@ -160,9 +158,8 @@ namespace Application.Services
                 }
                 catch (Exception ex)
                 {
-                    // Si falla, el mensaje de error en Swagger ahora será mucho más útil
                     string extraInfo = !isWindows ? $" | LibPath: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH")}" : "";
-                    throw new Exception($"Error en {dataPath}. Detalle: {ex.Message} -> {ex.InnerException?.Message}{extraInfo}");
+                    throw new Exception($"Error OCR: {ex.Message}{extraInfo}");
                 }
             }
             return textoOcr.ToString();
