@@ -97,55 +97,33 @@ namespace Application.Services
         {
             var textoOcr = new StringBuilder();
             bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
-            string dataPath = "";
 
-            if (isWindows)
+            // Definimos la ruta de tessdata según el SO
+            string dataPath = isWindows
+                ? Path.Combine(AppContext.BaseDirectory, "tessdata")
+                : "/usr/share/tesseract-ocr/5/tessdata";
+
+            if (!isWindows)
             {
-                dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
-            }
-            else
-            {
-                // 1. DIAGNÓSTICO (Confirmamos presencia física de la lib)
-                Console.WriteLine("--- DIAGNÓSTICO DE SISTEMA ---");
-                Console.WriteLine($"¿Existe /app/libleptonica-1.82.0.so?: {File.Exists("/app/libleptonica-1.82.0.so")}");
-
-                // 2. BUSQUEDA DE TESSDATA
-                string[] posiblesRutas = {
-            "/usr/share/tesseract-ocr/5/tessdata",
-            "/usr/share/tesseract-ocr/4.00/tessdata",
-            "/usr/share/tesseract-ocr/tessdata"
-        };
-
-                foreach (var ruta in posiblesRutas)
-                {
-                    if (Directory.Exists(ruta))
-                    {
-                        dataPath = ruta;
-                        break;
-                    }
-                }
-
-                // Reforzamos la ruta de carga de librerías
+                // ESTA LÍNEA ES VITAL: Le dice a Tesseract dónde buscamos las librerías que copiamos en el Dockerfile
                 Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", "/app:/usr/lib/x86_64-linux-gnu");
             }
 
-            if (string.IsNullOrEmpty(dataPath) || !Directory.Exists(dataPath))
-                throw new Exception("No se encontró la carpeta tessdata en Linux.");
-
             using (var images = new MagickImageCollection())
             {
-                if (stream.CanSeek) stream.Position = 0;
+                // Configuramos la resolución para que el OCR sea legible
                 var settings = new MagickReadSettings { Density = new Density(300, 300) };
+                if (stream.CanSeek) stream.Position = 0;
                 images.Read(stream, settings);
 
                 try
                 {
-                    // CAMBIO CRÍTICO: Usamos LstmOnly para evitar conflictos de versiones en Linux
+                    // EngineMode.LstmOnly es el "secreto" para que no tire 'Target of an invocation' en Linux
                     using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.LstmOnly))
                     {
                         foreach (var image in images)
                         {
-                            image.ColorType = ColorType.Bilevel;
+                            image.ColorType = ColorType.Bilevel; // Blanco y negro para mejor lectura
                             using (var pix = Pix.LoadFromMemory(image.ToByteArray(MagickFormat.Png)))
                             {
                                 using (var page = engine.Process(pix))
@@ -158,10 +136,12 @@ namespace Application.Services
                 }
                 catch (Exception ex)
                 {
-                    string extraInfo = !isWindows ? $" | LibPath: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH")}" : "";
-                    throw new Exception($"Error OCR: {ex.Message} -> {ex.InnerException?.Message}{extraInfo}");
+                    // Si esto falla, el mensaje nos dirá exactamente qué intentó cargar el sistema
+                    string libPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "no-set";
+                    throw new Exception($"Fallo crítico en Tesseract. Modo: LstmOnly. Ruta: {dataPath}. LibPath: {libPath}. Error: {ex.Message}");
                 }
             }
+
             return textoOcr.ToString();
         }
 
