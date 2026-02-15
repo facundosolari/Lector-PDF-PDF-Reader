@@ -31,22 +31,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libleptonica-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- SOLUCIÓN QUIRÚRGICA ---
-# Creamos el enlace en DOS rutas posibles para que no haya margen de error
-RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true && \
-    ln -s /usr/lib/x86_64-linux-gnu/liblept.so /app/libleptonica-1.82.0.so || true && \
+# --- MAPEO TOTAL DE LIBRERÍAS (X64) ---
+# Creamos el enlace en la carpeta de la app y en el sistema para evitar el fallo de carga
+RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /app/libleptonica-1.82.0.so || true && \
+    ln -s /usr/lib/x86_64-linux-gnu/liblept.so /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so || true && \
     ln -s /usr/lib/x86_64-linux-gnu/libtesseract.so /usr/lib/x86_64-linux-gnu/libtesseract5.so || true
 
-# Variables de entorno críticas: Incluimos /app en la búsqueda de librerías
+# Variables de entorno críticas
 ENV DOTNET_System_Drawing_EnableUnixSupport=true
-ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib:/app"
+# Obligamos a buscar primero en /app donde reside el .dll
+ENV LD_LIBRARY_PATH="/app:/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV ASPNETCORE_URLS=http://+:8080
 
-# Permisos de Ghostscript
+# Configuración de Ghostscript y permisos de PDF
 RUN ln -s /usr/lib/x86_64-linux-gnu/libgs.so /usr/lib/libgs.so || true && \
     find /etc -name "policy.xml" -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' {} + || true
 
 COPY --from=publish /app/publish .
+
+# Aseguramos que los enlaces existan incluso si la copia sobreescribió algo
+RUN ln -s /usr/lib/x86_64-linux-gnu/liblept.so /app/libleptonica-1.82.0.so || true
 
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "PDFLector.dll"]
