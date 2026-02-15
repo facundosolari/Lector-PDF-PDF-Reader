@@ -93,40 +93,56 @@ namespace Application.Services
                 return new PDFResponse { Exito = false, MensajeError = "Error al procesar: " + ex.Message };
             }
         }
-
         private string ProcesarConOCR(Stream stream)
         {
             var textoOcr = new StringBuilder();
             bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+            string dataPath = "";
 
-            // Forzamos la ruta de Linux a la ubicación estándar de la versión 5 que instala el Dockerfile
-            string dataPath = isWindows
-                ? Path.Combine(AppContext.BaseDirectory, "tessdata")
-                : "/usr/share/tesseract-ocr/5/tessdata";
-
-            // LOG DE DIAGNÓSTICO: Si falla, esto nos dirá por qué en los logs de Railway
-            if (!isWindows)
+            if (isWindows)
             {
-                if (!Directory.Exists(dataPath))
+                dataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+            }
+            else
+            {
+                // 1. DIAGNÓSTICO DE LIBRERÍAS (Aparecerá en logs de Railway)
+                Console.WriteLine("--- DIAGNÓSTICO DE SISTEMA ---");
+                string[] libCheck = { "/usr/lib/x86_64-linux-gnu/liblept.so", "/app/libleptonica-1.82.0.so" };
+                foreach (var lib in libCheck)
+                    Console.WriteLine($"¿Existe {lib}?: {File.Exists(lib)}");
+
+                // 2. BUSQUEDA AUTOMÁTICA DE TESSDATA
+                string[] posiblesRutas = {
+            "/usr/share/tesseract-ocr/5/tessdata",
+            "/usr/share/tesseract-ocr/4.00/tessdata",
+            "/usr/share/tesseract-ocr/tessdata"
+        };
+
+                foreach (var ruta in posiblesRutas)
                 {
-                    Console.WriteLine($"ERROR CRÍTICO: No existe la ruta {dataPath}");
-                    // Intento de rescate si Debian instaló la v4
-                    if (Directory.Exists("/usr/share/tesseract-ocr/4.00/tessdata"))
-                        dataPath = "/usr/share/tesseract-ocr/4.00/tessdata";
+                    if (Directory.Exists(ruta))
+                    {
+                        dataPath = ruta;
+                        Console.WriteLine($"CARPETA ENCONTRADA: {ruta}");
+                        break;
+                    }
                 }
+
                 ImageMagick.MagickNET.SetGhostscriptDirectory("/usr/lib/x86_64-linux-gnu");
             }
+
+            if (string.IsNullOrEmpty(dataPath) || !Directory.Exists(dataPath))
+                throw new Exception("No se encontró la carpeta tessdata en ninguna ruta conocida de Linux.");
 
             using (var images = new MagickImageCollection())
             {
                 if (stream.CanSeek) stream.Position = 0;
-
                 var settings = new MagickReadSettings { Density = new Density(300, 300) };
                 images.Read(stream, settings);
 
-                // USAMOS UN TRY-CATCH ESPECÍFICO AQUÍ PARA VER EL ERROR REAL
                 try
                 {
+                    // Intentamos inicializar con la ruta encontrada
                     using (var engine = new TesseractEngine(dataPath, "spa+eng", EngineMode.Default))
                     {
                         foreach (var image in images)
@@ -144,8 +160,9 @@ namespace Application.Services
                 }
                 catch (Exception ex)
                 {
-                    // Esto enviará el detalle técnico real al JSON de respuesta
-                    throw new Exception($"Fallo interno Tesseract en {dataPath}. Detalle: {ex.Message} -> {ex.InnerException?.Message}");
+                    // Si falla, el mensaje de error en Swagger ahora será mucho más útil
+                    string extraInfo = !isWindows ? $" | LibPath: {Environment.GetEnvironmentVariable("LD_LIBRARY_PATH")}" : "";
+                    throw new Exception($"Error en {dataPath}. Detalle: {ex.Message} -> {ex.InnerException?.Message}{extraInfo}");
                 }
             }
             return textoOcr.ToString();
